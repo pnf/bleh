@@ -24,7 +24,7 @@ public class Flipotron {
 
 		final PageSmoother ps;
 		try {
-			ps = new PageSmoother(file,".");
+			ps = new PageSmoother(file);
 		} catch(Exception e) {
 			throw new RuntimeException(e);
 		}
