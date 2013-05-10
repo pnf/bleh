@@ -1,13 +1,14 @@
 import java.lang.String
 import scala.collection.mutable
+import com.typesafe.scalalogging.slf4j.Logging
 
 
-abstract class Reactive {
+abstract class Reactive extends Logging {
   var dirty = false
   val parents = new mutable.WeakHashMap[Reactive,Integer]()
   def sully(indent : Integer = 1) {
     if(dirty) {return}
-    println("*"*indent + "sullying " + this)
+    logger.debug(s"${"*"*indent}sullying $this")
     dirty = true
     parents.map { case (p,_) => if(!p.dirty) p.sully(indent+1) }
   }
@@ -21,12 +22,12 @@ abstract class RD extends Reactive { //reactive double
 var v = 0.0
   def eval() : Double
   def value() = {
-    println("old value of " + this + " was " + v)
+    logger.debug(s"old value of $this + $v; dirty=$dirty")
     if(dirty) {
       v = eval()
       dirty = false
     }
-    println("new value of " + this + " is " + v)
+    logger.debug(s"new value of $this is $v")
     v
   }
   def +(rhs : RD) = new RDAdder(this,rhs)
