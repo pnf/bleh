@@ -15,6 +15,8 @@ import java.awt.image.*;
 
 public class PageSmoother {
 
+    static int MAXPAGE = 50;
+
 	//private String tmp;
 	private PDFFile pdffile;
 	private Integer ndone;
@@ -27,7 +29,7 @@ public class PageSmoother {
 	private File tmpdir;
 	private File[] files;
 
-	PageSmoother(String pdf,String tmp) throws IOException {
+	PageSmoother(String pdf) throws IOException {
 		File file = new File(pdf);
 		ndone = 0;
 		RandomAccessFile raf = new RandomAccessFile(file, "r");
@@ -101,8 +103,6 @@ public class PageSmoother {
 		int[] pixelsi = null;
 		long[] sum=null;
 		long[][] hist=null;
-		int[] nfg = null;
-		int[][] fghist=null;
 		BufferedImage bimage = null;
 
 		//		BufferedImage simage = null;
@@ -115,6 +115,7 @@ public class PageSmoother {
 		done(0);
 		for (int i=0; i<numPgs; i++)
 		{
+            if(i>MAXPAGE) break;
 			PDFPage page = getPage(i);
 			if(i==0) {
 				w = (int)page.getBBox().getWidth();
@@ -124,17 +125,13 @@ public class PageSmoother {
 				bimage = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
 				//simage = new BufferedImage(w, h, BufferedImage.TYPE_3BYTE_BGR);
 				pixelsi = new int[h*w];
-				sum = new long[4*h*w];
-				hist = new long[navg][4*h*w];
-				nfg = new int[4*h*w];
-				fghist = new int[navg][h*w];
-				for(int j=0; j<3*h*w; j++) {
+				sum = new long[h*w];
+				hist = new long[navg][h*w];
+				for(int j=0; j<h*w; j++) {
 					sum[j] = 0;
-					nfg[j] = 0;
 				}
 				page1.countDown();
 			}
-
 
 			//generate page image
 			Image image = pdffile.getPage(i).getImage(w,h,rect,null,true,true);
@@ -145,7 +142,6 @@ public class PageSmoother {
 			// Paint the image onto the buffered image
 			g.drawImage(image, 0, 0, null);
 			g.dispose();
-
 
 			// extract pixels into array
 			bimage.getRGB(0, 0, w, h, pixelsi, 0, w);
@@ -161,19 +157,14 @@ public class PageSmoother {
 				r |= (p&0xff); r<<=16; p>>=8;
 				r |= (p&0xff);
 				r = ~r;
-				int fg = (p==-1) ? 0 : 1;  // foreground?
 				sum[j] += r;  // rolling sum
-				nfg[j] += fg; // number of foreground pix
 				if(i>=navg) { // we have enough to average
 					sum[j]-= hist[im][j];    // roll off the old
-					nfg[j] -= fghist[im][j];
 					hist[im][j] = r;
-					fghist[im][j] = fg;
-					r2 = sum[j]/4;
+					r2 = (3*sum[j]/navg + r)/4;
 					r = ~r2;
 				} else {
 					hist[im][j] = r;
-					fghist[im][j] = fg;
 				}
 
 				// Repack averaged pixel 
