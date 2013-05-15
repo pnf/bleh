@@ -3,9 +3,9 @@ import scala.collection.mutable
 import com.typesafe.scalalogging.slf4j.Logging
 import scala.math._
 
-// xTODO: logging
+// xTODO: logging [Still want to understand how lazy interpolation works.)
 // xTODO: propagate dirty bit
-// xTODO: quadrature using reactives for integrand
+// xTODO: quadrature using reactives for integrand.
 // TODO: thread-safety during evaluation, parallel eval() of children, with proper handling of shared references
 // TODO: deep copy of integrand
 // TODO: temporal model with harmonic history and immutables
@@ -35,6 +35,7 @@ abstract class Reactive extends Logging {
     parents.put(p,1)
     p.sully()
   }
+
 }
 
 
@@ -51,6 +52,10 @@ var v = 0.0
     logger.debug(s"new value of $this is $v")
     v
   }
+
+  // def copy(dict : mutable.HashMap[Integer,RD]) : RD
+
+
   def +(rhs : RD) = new RDAdder(this,rhs)
   def *(rhs : RD) = new RDMultiplier(this,rhs)
   def /(rhs : RD) = new RDDivider(this,rhs)
@@ -77,6 +82,8 @@ case class RDVal(vv : Double = 0.0, id : Integer = Counter.id()) extends RD {
 case class RDMultiplier(lhs : RD, rhs : RD, id : Integer = Counter.id()) extends RD {
   lhs.addparent(this)
   rhs.addparent(this)
+
+
   def eval() = {
     v = lhs.value * rhs.value
     v
@@ -146,7 +153,7 @@ object Mathy  {
   }
 }
 
-case class RDQuad(y:RD,x:RDVal,a:RD,b:RD, eps : RD, id : Integer = Counter.id()) extends RD{
+case class RDQuad(y:RD,x:RDVal)(a:RD,b:RD, eps : RD, id : Integer = Counter.id()) extends RD{
   a.addparent(this)
   b.addparent(this)
   eps.addparent(this)
@@ -205,7 +212,7 @@ object R {
 
     val y = R~1 / x
     var eps = RDVal(0.01)
-    val z = RDQuad(y,x,0.1,1.0,eps)
+    val z = RDQuad(y,x)(0.1,1.0,eps)
     println(z); println(z.value())
     eps.set(0.001)
     println(z); println(z.value())
