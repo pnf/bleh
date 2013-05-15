@@ -35,14 +35,15 @@ abstract class Reactive extends Logging {
     parents.put(p,1)
     p.sully()
   }
-
 }
 
 
 
 abstract class RD extends Reactive { //reactive double
-var v = 0.0
+  var v = 0.0
+  val id : Integer
   def eval() : Double
+
   def value() = {
     logger.debug(s"old value of $this is $v; dirty=$dirty")
     if(dirty) {
@@ -52,20 +53,31 @@ var v = 0.0
     logger.debug(s"new value of $this is $v")
     v
   }
+  // provide one of these
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD
+  def copy() : RD = copy(new mutable.HashMap[Integer,RD]())
+  def copy(dict : mutable.HashMap[Integer,RD]) : RD = {
+    dict.get(id) match {
+      case Some(r) => r
+      case None => {
+        val r = makeme(dict)
+        dict += id -> r
+        r
+      }
+    }
+  }
 
-  // def copy(dict : mutable.HashMap[Integer,RD]) : RD
-
-
-  def +(rhs : RD) = new RDAdder(this,rhs)
-  def *(rhs : RD) = new RDMultiplier(this,rhs)
-  def /(rhs : RD) = new RDDivider(this,rhs)
-  def fib = new RDFibonacci(this)
-  def fact = new RDFactorial(this)
+  def +(rhs : RD) : RD = new RDAdder(this,rhs)
+  def *(rhs : RD) : RD = new RDMultiplier(this,rhs)
+  def /(rhs : RD) : RD = new RDDivider(this,rhs)
+  def fib : RD = new RDFibonacci(this)
+  def fact : RD = new RDFactorial(this)
 }
 
 case class RDConst(vv : Double, id : Integer  = Counter.id()) extends RD {
   v = vv
-  def eval() = vv
+  def eval() : Double = vv
+  def makeme(dict : mutable.HashMap[Integer,RD]) = {RDConst(v)}
 }
 
 case class RDVal(vv : Double = 0.0, id : Integer = Counter.id()) extends RD {
@@ -76,14 +88,15 @@ case class RDVal(vv : Double = 0.0, id : Integer = Counter.id()) extends RD {
     sully()
     this
   }
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {RDVal(v)}
   def eval() : Double = v
+
 }
 
 case class RDMultiplier(lhs : RD, rhs : RD, id : Integer = Counter.id()) extends RD {
   lhs.addparent(this)
   rhs.addparent(this)
-
-
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {RDMultiplier(lhs.copy(dict),rhs.copy(dict))}
   def eval() = {
     v = lhs.value * rhs.value
     v
@@ -93,6 +106,7 @@ case class RDMultiplier(lhs : RD, rhs : RD, id : Integer = Counter.id()) extends
 case class RDDivider(lhs: RD, rhs: RD, id : Integer = Counter.id()) extends RD {
   lhs.addparent(this)
   rhs.addparent(this)
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {RDDivider(lhs.copy(dict),rhs.copy(dict))}
   def eval() = {
     v = lhs.value / rhs.value
     v
@@ -102,7 +116,8 @@ case class RDDivider(lhs: RD, rhs: RD, id : Integer = Counter.id()) extends RD {
 case class RDAdder(lhs : RD, rhs : RD, id : Integer = Counter.id()) extends RD {
   lhs.addparent(this)
   rhs.addparent(this)
-  def eval() = {
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {RDAdder(lhs.copy(dict),rhs.copy(dict))}
+  def eval(): Double = {
     v = lhs.value + rhs.value
     v
   }
@@ -176,10 +191,18 @@ object Mathy extends Logging {
   }
 }
 
-case class RDQuad(y:RD,x:RDVal)(a:RD,b:RD, eps : RD, id : Integer = Counter.id()) extends RD{
+case class RDQuad(yy:RD ,xx:RDVal)(a:RD,b:RD, eps : RD, idd : Integer = Counter.id()) extends RD{
+  val id = idd
+  val dict = new mutable.HashMap[Integer,RD]
+  val y = yy.copy(dict)
+  // There has got to be a better way...
+  val x = dict.get(xx.id) match {case Some(r) => r match {case r : RDVal => r}
+                                 case _ => RDVal(v)}
   a.addparent(this)
   b.addparent(this)
   eps.addparent(this)
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {new RDQuad(y,x)(a.copy(dict),b.copy(dict),eps.copy(dict))}
+
   def eval() : Double = {
     val av = a.value()
     val bv = b.value()
@@ -201,15 +224,24 @@ case class RDQuad(y:RD,x:RDVal)(a:RD,b:RD, eps : RD, id : Integer = Counter.id()
   }
 }
 
-case class RDFactorial(arg : RD) extends RD {
+case class RDFactorial(arg : RD, id : Integer = Counter.id()) extends RD {
   arg.addparent(this)
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {new RDFactorial(arg.copy())}
   def eval(): Double = Mathy.laGamma(arg.value()+1.0)
 }
 
 
 case class RDFibonacci(arg : RD, id : Integer = Counter.id()) extends RD {
   arg.addparent(this)
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {new RDFibonacci(arg.copy())}
   def eval() : Double = Mathy.fib(arg.value().toLong).toDouble
+}
+
+case class RF1(f : Double=>Double, arg: RD, id : Integer = Counter.id()) extends RD {
+  arg.addparent(this)
+  def makeme(dict : mutable.HashMap[Integer,RD]) : RD = {new RF1(f,arg.copy())}
+
+  def eval() : Double = f(arg.value())
 }
 
 object Implicits {
@@ -226,7 +258,7 @@ object R {
     var foo : RD = _
     foo = R ~ 3.0 + 8.0
     println(foo);  println(foo.value())
-    var x = RDVal().set(3.14)
+    var x  = RDVal().set(3.14)
     foo = R ~ 1.0 + x * 2.0
     println(foo); println(foo.value())
     x.set(2.71828)
