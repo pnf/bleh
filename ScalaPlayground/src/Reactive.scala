@@ -108,7 +108,7 @@ case class RDAdder(lhs : RD, rhs : RD, id : Integer = Counter.id()) extends RD {
   }
 }
 
-object Mathy  {
+object Mathy extends Logging {
   val SQRT_PI = sqrt (Pi)
   val EPSILON = 1E-9
   def fac (k: Long): Long = {
@@ -147,9 +147,32 @@ object Mathy  {
   type Method = (Double=>Double, Double, Double) => Double
   def simpson(f:Double=>Double, a:Double, b:Double)=(f(a)+4*f((a+b)/2)+f(b))/6
   def trapezoid(f:Double=>Double, a:Double, b:Double)=(f(a)+f(b))/2
-  def integrate(f:Double=>Double, a:Double, b:Double, steps:Double, m:Method)= {
+  def integrate_n(f:Double=>Double, a:Double, b:Double, steps:Int, m:Method)= {
     val delta:Double=(b-a)/steps
     delta*(a until b by delta).foldLeft(0.0)((s,x) => s+m(f, x, x+delta))
+  }
+  // List(1,2,3,4,5,6).view.scanLeft(0)(_+_).takeWhile(x => x < 10).last
+  def integrate(f:Double=>Double, a:Double, b:Double, eps:Double, m:Method): Double = {
+    // interwebs notwithstanding, the immediately below doesn't exit loop correctly
+    /*
+    def step(ev:(Double,Double),n:Int) : (Double,Double) = {
+      logger.info(s"Step $ev $n")
+      val v = integrate_n(f,a,b,n,m)
+      (abs(v-ev._2),v)
+    }
+    List(10,100,1000,10000,100000,1000000).view.scanLeft((eps*2, 0.0))(step).takeWhile(x => x._1>eps).last._2
+    */
+    var n = 10
+    var e = eps*2.0
+    var v = 0.0
+    while(e>eps && n<1000000) {
+      logger.info(s"Step $e $v $n")
+      val vold = v
+      v = integrate_n(f,a,b,n,m)
+      e = abs(v-vold)
+      n = n*2
+    }
+    v
   }
 }
 
@@ -161,17 +184,20 @@ case class RDQuad(y:RD,x:RDVal)(a:RD,b:RD, eps : RD, id : Integer = Counter.id()
     val av = a.value()
     val bv = b.value()
     val ev = eps.value()
+    Mathy.integrate(vv  => { x.set(vv); y.value()}, av, bv, ev, Mathy.trapezoid)
+    /*
     var n = 5
     var error = ev*2
     var vret = 0.0
     var vnew = 0.0
     while(error>ev && n<1000000) {
-      vnew = Mathy.integrate(vv => { x.set(vv); y.value()}, av, bv, n, Mathy.trapezoid)
+      vnew = Mathy.integrate_n(vv  => { x.set(vv); y.value()}, av, bv, n, Mathy.trapezoid)
       error = abs(vnew - vret)
       vret = vnew
       n = n * 2
     }
     vret
+      */
   }
 }
 
